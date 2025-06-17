@@ -110,77 +110,156 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ## API Endpoints <a name="api-endpoints"></a>
 
-All endpoints require Bearer token authentication except health check.
+### 🔧 System & Health Endpoints
 
-### Authentication
+#### Health Check (No Auth Required)
 ```bash
-# Get API token (requires user registration first)
-curl -X POST http://localhost:4000/v1/api/authentication \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "password": "password"}'
+GET http://localhost:4000/v1/health
+```
+Returns system status, database health, environment, and version info.
+
+#### System Metrics (No Auth Required)
+```bash  
+GET http://localhost:4000/v1/debug/vars
+```
+Application metrics including goroutines, memory usage, and runtime stats.
+
+### 👤 User Management (No Auth Required)
+
+#### Register User
+```bash
+POST http://localhost:4000/v1/api/
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "securepassword123"
+}
 ```
 
-### Core Endpoints
+#### Authenticate User  
+```bash
+POST http://localhost:4000/v1/api/authentication
+Content-Type: application/json
 
-#### 🎵 Music News
+{
+  "email": "john@example.com", 
+  "password": "securepassword123"
+}
+```
+**Returns Bearer token for API access**
+
+#### Activate Account
+```bash
+PUT http://localhost:4000/v1/api/activated
+Content-Type: application/json
+
+{
+  "token": "activation_token_here"
+}
+```
+
+### 🎵 Music Services (Auth Required)
+
+> **Authentication**: All music endpoints require Bearer token  
+> `Authorization: Bearer U2JNYCEIPF6FEBOE4AO3R44EE4`
+
+#### 1. Music News
 ```bash
 GET /v1/musical/news
+GET /v1/musical/news?limit=10&country=us&type=everything&genre=rock
 ```
+
 **Parameters:**
-- `limit` (optional): Number of articles (1-100, default: 20)
-- `country` (optional): Country code (default: "us")
-- `type` (optional): "headlines" or "everything" (default: "everything")  
-- `genre` (optional): Music genre filter
+- `limit`: Number of articles (1-100, default: 20)
+- `country`: Country code (us, gb, ca, etc., default: us)  
+- `type`: `headlines` | `everything` (default: everything)
+- `genre`: Music genre filter (rock, pop, jazz, etc.)
 
 **Example:**
 ```bash
-curl -H "Authorization: Bearer TOKEN" \
+curl -H "Authorization: Bearer U2JNYCEIPF6FEBOE4AO3R44EE4" \
   "http://localhost:4000/v1/musical/news?genre=rock&limit=10"
 ```
 
-#### 📈 Music Trends  
+#### 2. Music Trends
 ```bash
 GET /v1/musical/trends
+GET /v1/musical/trends?limit=20&period=1month&type=tracks
+GET /v1/musical/trends?type=artists&limit=15&period=7day
 ```
+
 **Parameters:**
-- `limit` (optional): Number of items (1-200, default: 50)
-- `period` (optional): 7day, 1month, 3month, 6month, 12month, overall
-- `type` (optional): "tracks" or "artists" (default: "tracks")
+- `limit`: Number of items (1-200, default: 50)
+- `period`: `7day` | `1month` | `3month` | `6month` | `12month` | `overall`
+- `type`: `tracks` | `artists` (default: tracks)
 
 **Example:**
 ```bash
-curl -H "Authorization: Bearer TOKEN" \
+curl -H "Authorization: Bearer U2JNYCEIPF6FEBOE4AO3R44EE4" \
   "http://localhost:4000/v1/musical/trends?type=artists&period=1month&limit=20"
 ```
 
-#### 🎤 Song Lyrics
-```bash  
-GET /v1/musical/lyrics
+#### 3. Song Lyrics  
+```bash
+GET /v1/musical/lyrics?artist=Coldplay&title=Yellow
+GET /v1/musical/lyrics?artist=Coldplay&title=Yellow&metadata=true
+GET /v1/musical/lyrics?artist=Coldplay&title=Yellow&format=raw
 ```
+
 **Parameters:**
-- `artist` (required): Artist name
-- `title` or `song` (required): Song title
-- `format` (optional): "processed" or "raw" (default: "processed")
+- `artist`: Artist name (required)
+- `title` or `song`: Song title (required)  
+- `metadata`: `true` | `false` (default: false) - Include track metadata
+- `format`: `processed` | `raw` (default: processed)
 
 **Example:**
 ```bash
-curl -H "Authorization: Bearer TOKEN" \
-  "http://localhost:4000/v1/musical/lyrics?artist=Coldplay&title=Yellow"
+curl -H "Authorization: Bearer U2JNYCEIPF6FEBOE4AO3R44EE4" \
+  "http://localhost:4000/v1/musical/lyrics?artist=Coldplay&title=Yellow&metadata=true"
 ```
 
-**Processed Response Includes:**
-- Raw lyrics text
-- Cleaned lyrics lines array
-- Word count and line count
-- Verse count estimation
-- Chorus detection
-- Source attribution
+**Processed Response Features:**
+- Clean, formatted lyrics text
+- Lyrics analytics (line count, verses, chorus detection)
+- Word count and structure analysis
+- Optional album art, duration, play counts (with metadata=true)
 
-#### 🔍 Health Check
+#### 4. Track Information
 ```bash
-GET /v1/health
+GET /v1/musical/track-info?artist=Coldplay&title=Yellow
 ```
-No authentication required.
+
+**Parameters:**
+- `artist`: Artist name (required)
+- `title` or `song`: Song title (required)
+
+**Purpose**: Get detailed track metadata without lyrics (faster response)
+
+**Example:**
+```bash
+curl -H "Authorization: Bearer U2JNYCEIPF6FEBOE4AO3R44EE4" \
+  "http://localhost:4000/v1/musical/track-info?artist=Coldplay&title=Yellow"
+```
+
+**Response Features:**
+- Album artwork and information
+- Track duration and popularity metrics  
+- Artist tags and genres
+- Track summary/biography
+- Convenient lyrics URL for separate fetching
+
+### 🎯 Response Performance
+
+| Endpoint | Response Time | Use Case |
+|----------|---------------|----------|
+| `/health` | <100ms | System monitoring |
+| `/news` | 1-3s | Music industry updates |
+| `/trends` | 1-2s | Trending content discovery |
+| `/lyrics` | 1-2s | Lyrics-focused apps |
+| `/lyrics?metadata=true` | 2-3s | Complete song pages |
+| `/track-info` | 0.5-1s | Fast track browsing |
 
 ## Environment Setup <a name="environment-setup"></a>
 

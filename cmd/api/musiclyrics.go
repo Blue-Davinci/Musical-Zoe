@@ -15,18 +15,31 @@ type LyricsResponse struct {
 	Error  string `json:"error,omitempty"`
 }
 
-// ProcessedLyricsResponse represents the cleaned and processed lyrics response
+// TrackMetadata represents additional track information from Last.fm
+type TrackMetadata struct {
+	Album     string   `json:"album,omitempty"`
+	Duration  string   `json:"duration,omitempty"`
+	PlayCount string   `json:"playcount,omitempty"`
+	Listeners string   `json:"listeners,omitempty"`
+	URL       string   `json:"url,omitempty"`
+	Images    []Image  `json:"images,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
+	Summary   string   `json:"summary,omitempty"`
+}
+
+// ProcessedLyricsResponse represents the cleaned and processed lyrics response with metadata
 type ProcessedLyricsResponse struct {
-	Artist        string   `json:"artist"`
-	Title         string   `json:"title"`
-	Lyrics        string   `json:"lyrics"`
-	CleanedLyrics []string `json:"cleaned_lyrics"`
-	LinesCount    int      `json:"lines_count"`
-	VersesCount   int      `json:"verses_count"`
-	HasChorus     bool     `json:"has_chorus"`
-	WordCount     int      `json:"word_count"`
-	Source        string   `json:"source"`
-	Status        string   `json:"status"`
+	Artist        string         `json:"artist"`
+	Title         string         `json:"title"`
+	Lyrics        string         `json:"lyrics"`
+	CleanedLyrics []string       `json:"cleaned_lyrics"`
+	LinesCount    int            `json:"lines_count"`
+	VersesCount   int            `json:"verses_count"`
+	HasChorus     bool           `json:"has_chorus"`
+	WordCount     int            `json:"word_count"`
+	Source        string         `json:"source"`
+	Status        string         `json:"status"`
+	Metadata      *TrackMetadata `json:"metadata,omitempty"`
 }
 
 // LyricsService handles all lyrics-related operations
@@ -217,13 +230,62 @@ func (ls *LyricsService) detectChorus(lyrics string) bool {
 	return false
 }
 
+// LastFMTrackInfoResponse represents the response from Last.fm track.getInfo API
+type LastFMTrackInfoResponse struct {
+	Track LastFMTrackInfo `json:"track"`
+}
+
+// LastFMTrackInfo represents detailed track information from Last.fm
+type LastFMTrackInfo struct {
+	Name      string             `json:"name"`
+	Duration  string             `json:"duration"`
+	PlayCount string             `json:"playcount"`
+	Listeners string             `json:"listeners"`
+	URL       string             `json:"url"`
+	Artist    LastFMArtistSimple `json:"artist"`
+	Album     *LastFMAlbumSimple `json:"album,omitempty"`
+	TopTags   *LastFMTopTags     `json:"toptags,omitempty"`
+	Wiki      *LastFMWiki        `json:"wiki,omitempty"`
+}
+
+// LastFMArtistSimple represents simplified artist info
+type LastFMArtistSimple struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+// LastFMAlbumSimple represents simplified album info
+type LastFMAlbumSimple struct {
+	Title  string  `json:"title"`
+	URL    string  `json:"url"`
+	Images []Image `json:"image"`
+}
+
+// LastFMTopTags represents track tags
+type LastFMTopTags struct {
+	Tag []LastFMTag `json:"tag"`
+}
+
+// LastFMTag represents a single tag
+type LastFMTag struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+// LastFMWiki represents track wiki information
+type LastFMWiki struct {
+	Summary string `json:"summary"`
+	Content string `json:"content"`
+}
+
 // getLyrics handles the request to fetch lyrics for a song
 func (app *application) getLyrics(w http.ResponseWriter, r *http.Request) {
 	// Read query parameters
 	var input struct {
-		artist string
-		title  string
-		format string
+		artist   string
+		title    string
+		format   string
+		metadata string
 	}
 
 	qs := r.URL.Query()
@@ -236,6 +298,10 @@ func (app *application) getLyrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input.format = app.readString(qs, "format", "processed")
+	input.metadata = app.readString(qs, "metadata", "false")
+
+	// Convert metadata parameter to boolean
+	includeMetadata := input.metadata == "true" || input.metadata == "1"
 
 	// Validate required parameters
 	if input.artist == "" {
@@ -251,8 +317,8 @@ func (app *application) getLyrics(w http.ResponseWriter, r *http.Request) {
 	// Create lyrics service
 	lyricsService := NewLyricsService(app.config)
 
-	// Fetch lyrics
-	response, err := lyricsService.FetchLyrics(input.artist, input.title)
+	// Fetch lyrics with optional metadata
+	response, err := lyricsService.FetchLyricsWithMetadata(input.artist, input.title, includeMetadata)
 	if err != nil {
 		// Check for timeout errors
 		if strings.Contains(err.Error(), "request timeout") {
@@ -294,4 +360,163 @@ func (app *application) getLyrics(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+}
+
+// Enhanced track info response with multiple sources
+type TrackInfoResponse struct {
+	Artist    string         `json:"artist"`
+	Title     string         `json:"title"`
+	LastFM    *TrackMetadata `json:"lastfm,omitempty"`
+	HasLyrics bool           `json:"has_lyrics"`
+	LyricsURL string         `json:"lyrics_url,omitempty"`
+	Status    string         `json:"status"`
+	Sources   []string       `json:"sources"`
+}
+
+// getTrackInfo handles requests for detailed track information
+func (app *application) getTrackInfo(w http.ResponseWriter, r *http.Request) {
+	// Read query parameters
+	var input struct {
+		artist string
+		title  string
+	}
+
+	qs := r.URL.Query()
+	input.artist = app.readString(qs, "artist", "")
+	input.title = app.readString(qs, "title", "")
+	if input.title == "" {
+		input.title = app.readString(qs, "song", "")
+	}
+
+	// Validate required parameters
+	if input.artist == "" {
+		app.badRequestResponse(w, r, fmt.Errorf("artist parameter is required"))
+		return
+	}
+
+	if input.title == "" {
+		app.badRequestResponse(w, r, fmt.Errorf("title or song parameter is required"))
+		return
+	}
+
+	// Create lyrics service for metadata fetching
+	lyricsService := NewLyricsService(app.config)
+
+	// Fetch metadata from Last.fm
+	metadata, err := lyricsService.FetchTrackMetadata(input.artist, input.title)
+	if err != nil {
+		// If metadata fails, still return basic info
+		response := &TrackInfoResponse{
+			Artist:    input.artist,
+			Title:     input.title,
+			HasLyrics: false,
+			Status:    "partial",
+			Sources:   []string{},
+		}
+
+		err = app.writeJSON(w, http.StatusOK, envelope{"track_info": response}, nil)
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	// Build the response
+	response := &TrackInfoResponse{
+		Artist:    input.artist,
+		Title:     input.title,
+		LastFM:    metadata,
+		HasLyrics: true, // We could check lyrics.ovh here but it might be slow
+		Status:    "found",
+		Sources:   []string{"last.fm"},
+	}
+
+	// Add lyrics URL for easy access
+	if response.HasLyrics {
+		response.LyricsURL = fmt.Sprintf("/v1/musical/lyrics?artist=%s&title=%s",
+			url.QueryEscape(input.artist), url.QueryEscape(input.title))
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"track_info": response}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+// FetchTrackMetadata fetches additional track information from Last.fm
+func (ls *LyricsService) FetchTrackMetadata(artist, title string) (*TrackMetadata, error) {
+	params := make(map[string]string)
+	params["method"] = "track.getinfo"
+	params["api_key"] = ls.config.api.lastfm
+	params["artist"] = artist
+	params["track"] = title
+	params["format"] = "json"
+
+	// Build the URL
+	apiURL, err := buildAPIURL(ls.config.baseURLs.lastfm, "", params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build Last.fm API URL: %w", err)
+	}
+
+	// Make the request
+	response, err := GETRequest[LastFMTrackInfoResponse](ls.client, apiURL, nil)
+	if err != nil {
+		// If Last.fm fails, don't fail the whole request - just return nil metadata
+		return nil, nil
+	}
+
+	// Convert Last.fm response to our metadata format
+	metadata := &TrackMetadata{
+		Duration:  response.Track.Duration,
+		PlayCount: response.Track.PlayCount,
+		Listeners: response.Track.Listeners,
+		URL:       response.Track.URL,
+	}
+
+	// Add album info if available
+	if response.Track.Album != nil {
+		metadata.Album = response.Track.Album.Title
+		metadata.Images = response.Track.Album.Images
+	}
+
+	// Add tags if available
+	if response.Track.TopTags != nil {
+		for _, tag := range response.Track.TopTags.Tag {
+			metadata.Tags = append(metadata.Tags, tag.Name)
+		}
+	}
+
+	// Add summary if available
+	if response.Track.Wiki != nil {
+		metadata.Summary = response.Track.Wiki.Summary
+	}
+
+	return metadata, nil
+}
+
+// FetchLyricsWithMetadata fetches lyrics and additional track metadata
+func (ls *LyricsService) FetchLyricsWithMetadata(artist, title string, includeMetadata bool) (*ProcessedLyricsResponse, error) {
+	// First fetch the lyrics
+	lyricsResponse, err := ls.FetchLyrics(artist, title)
+	if err != nil {
+		return nil, err
+	}
+
+	// If metadata is not requested or lyrics not found, return as is
+	if !includeMetadata || lyricsResponse.Status != "found" {
+		return lyricsResponse, nil
+	}
+
+	// Fetch metadata from Last.fm (non-blocking - if it fails, we still return lyrics)
+	metadata, err := ls.FetchTrackMetadata(artist, title)
+	if err != nil {
+		// If metadata fetch fails, just log and continue without metadata
+		// Don't fail the whole request for metadata issues
+		metadata = nil
+	}
+
+	// Add metadata to the lyrics response
+	lyricsResponse.Metadata = metadata
+
+	return lyricsResponse, nil
 }

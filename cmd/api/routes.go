@@ -72,6 +72,8 @@ func (app *application) musicalRoutes(dynamicMiddleware *alice.Chain) chi.Router
 	musicalRoutes.With(dynamicMiddleware.Then).Get("/trends", app.getAllMusicTrends)
 	// /lyrics : for fetching song lyrics
 	musicalRoutes.With(dynamicMiddleware.Then).Get("/lyrics", app.getLyrics)
+	// /track-info : for fetching detailed track information and metadata
+	musicalRoutes.With(dynamicMiddleware.Then).Get("/track-info", app.getTrackInfo)
 	return musicalRoutes
 
 }
