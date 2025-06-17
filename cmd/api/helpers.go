@@ -7,12 +7,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/Blue-Davinci/musical-zoe/internal/data"
 	"github.com/Blue-Davinci/musical-zoe/internal/validator"
-	"github.com/go-chi/chi"
 )
 
 var (
@@ -74,18 +72,6 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any
 		return errors.New("body must only contain a single JSON value")
 	}
 	return nil
-}
-
-// Retrieve the "id" URL parameter from the current request context, then convert it to
-// an integer and return it. If the operation isn't successful, return a nil UUID and an error.
-func (app *application) readIDParam(r *http.Request, parameterName string) (int64, error) {
-	// We use chi's URLParam method to get our ID parameter from the URL.
-	params := chi.URLParam(r, parameterName)
-	id, err := strconv.ParseInt(params, 10, 64)
-	if err != nil || id < 1 {
-		return 0, errors.New("invalid i-id parameter")
-	}
-	return id, nil
 }
 
 // jsonReadAndHandleError() is a helper function that takes an error as a parameter and
@@ -199,21 +185,6 @@ func (app *application) aunthenticatorHelper(r *http.Request) (*data.User, error
 	return user, nil
 }
 
-// validateURL() checks if the input string is a valid URL
-func validateURL(input string) error {
-	parsedURL, err := url.ParseRequestURI(input)
-	if err != nil {
-		return fmt.Errorf("invalid URL: %w", err)
-	}
-
-	// Further validate URL components
-	if parsedURL.Scheme == "" || parsedURL.Host == "" {
-		return fmt.Errorf("URL must contain both scheme and host")
-	}
-
-	return nil
-}
-
 // The readString() helper returns a string value from the query string, or the provided
 // default value if no matching key could be found.
 func (app *application) readString(qs url.Values, key string, defaultValue string) string {
@@ -226,28 +197,6 @@ func (app *application) readString(qs url.Values, key string, defaultValue strin
 	}
 	// Otherwise return the string.
 	return s
-}
-
-// The readInt() helper reads a string value from the query string and converts it to an
-// integer before returning. If no matching key could be found it returns the provided
-// default value. If the value couldn't be converted to an integer, then we record an
-// error message in the provided Validator instance.
-func (app *application) readInt(qs url.Values, key string, defaultValue int, v *validator.Validator) int {
-	// Extract the value from the query string.
-	s := qs.Get(key)
-	// If no key exists (or the value is empty) then return the default value.
-	if s == "" {
-		return defaultValue
-	}
-	// Try to convert the value to an int. If this fails, add an error message to the
-	// validator instance and return the default value.
-	i, err := strconv.Atoi(s)
-	if err != nil {
-		v.AddError(key, "must be an integer value")
-		return defaultValue
-	}
-	// Otherwise, return the converted integer value.
-	return i
 }
 
 // buildAPIURL constructs a full API URL with query parameters
@@ -271,15 +220,4 @@ func buildAPIURL(baseURL, endpoint string, params map[string]string) (string, er
 	u.RawQuery = q.Encode()
 
 	return u.String(), nil
-}
-
-// buildNewsAPIURL specifically builds News API URLs with common parameters
-func (app *application) buildNewsAPIURL(endpoint string, params map[string]string) (string, error) {
-	// Ensure API key is included
-	if params == nil {
-		params = make(map[string]string)
-	}
-	params["apiKey"] = app.config.api.newsapi
-
-	return buildAPIURL(app.config.baseURLs.newsapi, endpoint, params)
 }
