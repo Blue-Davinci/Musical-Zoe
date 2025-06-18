@@ -65,6 +65,7 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 			"activationURL":   app.config.url.activationURL + token.Plaintext,
 			"activationToken": token.Plaintext,
 			"userID":          user.ID,
+			"name":            user.Name,
 		}
 		// Send the welcome email, passing in the map above as dynamic data.
 		err = app.mailer.Send(user.Email, "user_welcome.tmpl", data)
