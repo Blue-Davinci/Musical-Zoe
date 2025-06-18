@@ -85,6 +85,7 @@ type User struct {
 type UserSubInfo struct {
 	Name      string    `json:"name"`
 	Email     string    `json:"email"`
+	Activated bool      `json:"activated"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

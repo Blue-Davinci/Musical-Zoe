@@ -219,6 +219,7 @@ func (app *application) createAuthenticationApiKeyHandler(w http.ResponseWriter,
 	userSubInfo := data.UserSubInfo{
 		Name:      user.Name,
 		Email:     user.Email,
+		Activated: user.Activated,
 		CreatedAt: user.CreatedAt,
 	}
 	// Encode the apikey to json and send it to the user with a 201 Created status code
