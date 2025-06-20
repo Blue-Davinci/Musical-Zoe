@@ -119,8 +119,8 @@ jobs:
 
     - name: Run gosec Security Scanner
       run: |
-        go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
-        gosec -exclude=G104,G204,G304 ./...
+        go install github.com/securego/gosec/v2/cmd/gosec@latest
+        gosec -exclude=G104,G204,G304 -exclude-generated ./...
 
     - name: Run go vet
       run: go vet ./...
