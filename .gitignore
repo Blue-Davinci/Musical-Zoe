@@ -34,3 +34,6 @@ bin.
 
 # Summary, internal use
 PROJECT_SUMMARY.md
+
+# html files
+*.html
