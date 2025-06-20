@@ -16,7 +16,7 @@ func TestHealthcheckHandler(t *testing.T) {
 		config: config{
 			env: "test",
 		},
-		logger: zap.NewNop(), // No-op logger for tests
+		logger: zap.NewNop(),  // No-op logger for tests
 		models: data.Models{}, // Empty models for this test
 	}
 

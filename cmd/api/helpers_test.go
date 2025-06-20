@@ -48,10 +48,10 @@ func TestReadString(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a mock request with query parameters
 			req := httptest.NewRequest("GET", "/?"+tt.queryParams, nil)
-			
+
 			// Create test app
 			app := &application{}
-			
+
 			result := app.readString(req.URL.Query(), tt.key, tt.defaultValue)
 			if result != tt.expected {
 				t.Errorf("readString() = %v, want %v", result, tt.expected)
@@ -116,33 +116,33 @@ func TestBuildAPIURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := buildAPIURL(tt.baseURL, tt.endpoint, tt.params)
-			
+
 			if tt.hasError && err == nil {
 				t.Errorf("expected error but got none")
 			}
-			
+
 			if !tt.hasError && err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
-			
+
 			if !tt.hasError {
 				// Parse both URLs to compare query params (order may vary)
 				expectedURL, _ := url.Parse(tt.expected)
 				resultURL, _ := url.Parse(result)
-				
+
 				if expectedURL.Scheme != resultURL.Scheme ||
 					expectedURL.Host != resultURL.Host ||
 					expectedURL.Path != resultURL.Path {
 					t.Errorf("buildAPIURL() base parts = %v, want %v", result, tt.expected)
 				}
-				
+
 				// Check that all expected params are present
 				expectedParams := expectedURL.Query()
 				resultParams := resultURL.Query()
-				
+
 				for key, values := range expectedParams {
 					if resultParams.Get(key) != values[0] {
-						t.Errorf("buildAPIURL() missing or incorrect param %s = %v, want %v", 
+						t.Errorf("buildAPIURL() missing or incorrect param %s = %v, want %v",
 							key, resultParams.Get(key), values[0])
 					}
 				}

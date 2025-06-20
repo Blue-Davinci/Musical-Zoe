@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/hashicorp/go-retryablehttp"
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 )
 
 // Client represents the central HTTP client with retry capabilities
@@ -50,13 +50,14 @@ func GETRequest[T any](c *Optivet_Client, url string, headers map[string]string)
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-
 	// Perform the request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return result, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// Check if the response status is not 2xx
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -107,13 +108,14 @@ func GETRequestWithParams[T any](c *Optivet_Client, baseURL string, params map[s
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-
 	// Perform the request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return result, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// Check if the response status is not 2xx
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
