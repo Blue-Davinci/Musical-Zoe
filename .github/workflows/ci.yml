@@ -45,7 +45,7 @@ jobs:
         go-version: ${{ matrix.go-version }}
 
     - name: Cache Go modules
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/go-build
@@ -96,7 +96,7 @@ jobs:
 
     - name: Upload coverage reports to Codecov
       if: matrix.go-version == '1.24.4'
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage.out
         flags: unittests
@@ -162,7 +162,7 @@ jobs:
         go-version: ${{ env.GO_VERSION }}
 
     - name: Cache Go modules
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/go-build
@@ -185,7 +185,7 @@ jobs:
         go build -ldflags="-s -w" -o bin/${BINARY_NAME} ./cmd/api
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: musical-zoe-${{ matrix.goos }}-${{ matrix.goarch }}
         path: bin/musical-zoe-${{ matrix.goos }}-${{ matrix.goarch }}*
@@ -202,7 +202,10 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
+      with:
+        pattern: musical-zoe-*
+        merge-multiple: true
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
@@ -234,7 +237,7 @@ jobs:
         cat benchmark-results.txt
 
     - name: Upload benchmark results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: benchmark-results
         path: benchmark-results.txt
