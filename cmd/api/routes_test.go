@@ -34,7 +34,7 @@ func TestRoutes(t *testing.T) {
 		},
 		{
 			name:           "music news without auth",
-			method:         "GET", 
+			method:         "GET",
 			path:           "/v1/musical/news",
 			expectedStatus: http.StatusUnauthorized,
 			requiresAuth:   true,
@@ -42,7 +42,7 @@ func TestRoutes(t *testing.T) {
 		{
 			name:           "music trends without auth",
 			method:         "GET",
-			path:           "/v1/musical/trends", 
+			path:           "/v1/musical/trends",
 			expectedStatus: http.StatusUnauthorized,
 			requiresAuth:   true,
 		},
@@ -76,16 +76,16 @@ func TestRoutes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create request
 			req := httptest.NewRequest(tt.method, tt.path, nil)
-			
+
 			// Create response recorder
 			rr := httptest.NewRecorder()
-			
+
 			// Serve the request
 			router.ServeHTTP(rr, req)
-			
+
 			// Check status code
 			if rr.Code != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d for %s %s", 
+				t.Errorf("expected status %d, got %d for %s %s",
 					tt.expectedStatus, rr.Code, tt.method, tt.path)
 			}
 		})
@@ -94,7 +94,7 @@ func TestRoutes(t *testing.T) {
 
 func TestAuthenticationMiddleware(t *testing.T) {
 	t.Skip("Skipping authentication middleware test due to metrics initialization conflict")
-	
+
 	// This test would need to be restructured to avoid the metrics collision
 	// or run in isolation to test authentication properly
 }

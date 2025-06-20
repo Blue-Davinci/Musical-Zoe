@@ -6,7 +6,7 @@ import (
 	"html/template"
 	"time"
 
-	"github.com/go-mail/mail/v2"
+	mail "github.com/go-mail/mail/v2"
 )
 
 // Below we declare a new variable with the type embed.FS (embedded file system) to hold

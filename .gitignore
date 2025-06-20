@@ -37,3 +37,6 @@ PROJECT_SUMMARY.md
 
 # html files
 *.html
+
+# gosec sarif
+*.sarif

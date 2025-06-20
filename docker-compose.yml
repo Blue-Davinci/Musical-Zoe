@@ -1,4 +1,7 @@
+version: '3.8'
+
 services:
+  # PostgreSQL Database
   postgres:
     image: postgres:16
     container_name: musicalzoe-postgres
@@ -8,11 +11,32 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - musical-zoe-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U musicalzoe -d musicalzoe"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # Redis (for caching - optional future use)
+  redis:
+    image: redis:7-alpine
+    container_name: musicalzoe-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - musical-zoe-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
 volumes:
   postgres_data:
+    driver: local
+
+networks:
+  musical-zoe-network:
+    driver: bridge

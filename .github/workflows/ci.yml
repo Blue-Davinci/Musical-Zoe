@@ -1,0 +1,240 @@
+name: Musical-Zoe CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, development ]
+  pull_request:
+    branches: [ main, development ]
+
+env:
+  GO_VERSION: '1.24.4'
+  POSTGRES_VERSION: '15'
+
+jobs:
+  # Job 1: Run tests with different Go versions
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        go-version: ['1.23', '1.24.4']
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: musical_zoe_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go ${{ matrix.go-version }}
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ matrix.go-version }}-
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Create test environment file
+      run: |
+        mkdir -p cmd/api
+        cat > cmd/api/.env << EOF
+        MUSICALZOE_DB_DSN=postgres://postgres:postgres@localhost:5432/musical_zoe_test?sslmode=disable
+        MUSICALZOE_JWT_SECRET=testsecret123456789012345678901234567890
+        MUSICALZOE_ENVIRONMENT=testing
+        MUSICALZOE_PORT=4000
+        MUSICALZOE_API_KEY=test_api_key
+        NEWS_API_KEY=test_news_key
+        LASTFM_API_KEY=test_lastfm_key
+        EOF
+
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432 -U postgres; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+
+    - name: Install goose for migrations
+      run: go install github.com/pressly/goose/v3/cmd/goose@latest
+
+    - name: Run database migrations
+      run: |
+        source cmd/api/.env
+        goose -dir internal/sql/schema postgres "$MUSICALZOE_DB_DSN" up
+
+    - name: Run tests
+      run: go test -v -race -buildvcs ./cmd/api/...
+
+    - name: Run tests with coverage
+      run: go test -v -race -buildvcs -coverprofile=coverage.out ./cmd/api/...
+
+    - name: Upload coverage reports to Codecov
+      if: matrix.go-version == '1.24.4'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+
+  # Job 2: Security and code quality
+  security:
+    name: Security & Code Quality
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Run gosec Security Scanner
+      run: |
+        go install github.com/securego/gosec/v2/cmd/gosec@latest
+        gosec -exclude=G104,G204,G304 -exclude-generated ./...
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Install staticcheck
+      run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+    - name: Run staticcheck
+      run: staticcheck ./...
+
+    - name: Install golangci-lint
+      run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
+
+    - name: Run golangci-lint
+      run: golangci-lint run
+
+  # Job 3: Build and create artifacts
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    if: github.event_name == 'push'
+    
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ env.GO_VERSION }}-${{ hashFiles('**/go.sum') }}
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        mkdir -p bin
+        BINARY_NAME=musical-zoe-${{ matrix.goos }}-${{ matrix.goarch }}
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          BINARY_NAME="${BINARY_NAME}.exe"
+        fi
+        go build -ldflags="-s -w" -o bin/${BINARY_NAME} ./cmd/api
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: musical-zoe-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: bin/musical-zoe-${{ matrix.goos }}-${{ matrix.goarch }}*
+
+  # Job 4: Create GitHub Release (only on main branch with tags)
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [test, security, build]
+    if: github.ref == 'refs/heads/main' && startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          musical-zoe-*/musical-zoe-*
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+
+  # Job 5: Performance benchmarks (optional, runs on schedule or when requested)
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || contains(github.event.head_commit.message, '[benchmark]')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Run benchmarks
+      run: |
+        go test -bench=. -benchmem ./cmd/api/... > benchmark-results.txt || true
+        cat benchmark-results.txt
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: benchmark-results.txt
